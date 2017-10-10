@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
+import PropTypes from 'prop-types'
 
 export default class Switch extends React.Component {
 
@@ -23,6 +24,7 @@ export default class Switch extends React.Component {
 
   componentWillReceiveProps(nextProps){
     const newValue = nextProps.value !== undefined ? nextProps.value : this.state.value;
+    const oldValue = this.state.value;
 
     // ensure width is updated
     this.setState({
@@ -30,7 +32,7 @@ export default class Switch extends React.Component {
       handleWidth: nextProps.handleWidth,
       value: newValue
     }, () => {
-      this._recalculateWidth(nextProps.value !== undefined);
+      this._recalculateWidth(newValue == oldValue);
     });
   }
 
@@ -56,6 +58,7 @@ export default class Switch extends React.Component {
       disabled,
       readonly,
       inverse,
+      tristate,
       animate,
       id
     } = this.props;
@@ -84,12 +87,15 @@ export default class Switch extends React.Component {
       classes.push(baseClass + "-indeterminate");
 
     if (inverse)
-      classes.push(baseClass + "-inverse");
+        classes.push(baseClass + "-inverse");
+
+    if (tristate)
+        classes.push(baseClass + "-tristate");
 
     if (id)
       classes.push(baseClass + "-" + id);
 
-    if (animate && !dragStart & !skipAnimation)
+    if (animate && !dragStart && !skipAnimation)
       classes.push(baseClass + "-animate");
 
     if (focus)
@@ -131,7 +137,9 @@ export default class Switch extends React.Component {
 
     let newOffset = offset;
 
-    if (value === null) {
+    if(handleWidth === 'auto') {
+      newOffset = 0;
+    } else if (value === null) {
       newOffset = -(handleWidth / 2);
     } else if (value) {
       newOffset = inverse ? -handleWidth : 0;
@@ -155,7 +163,7 @@ export default class Switch extends React.Component {
     if(this._disableUserInput())
       return;
 
-    this._setValue(false)
+    this._setValue(this.props.tristate?(this._getValue()==null):false);
     this._setFocus();
   }
 
@@ -163,7 +171,7 @@ export default class Switch extends React.Component {
     if(this._disableUserInput())
       return;
 
-    this._setValue(true)
+    this._setValue(this.props.tristate?(this._getValue()!=null):true);
     this._setFocus();
   }
 
@@ -209,6 +217,36 @@ export default class Switch extends React.Component {
     }); 
   }
 
+  _handleLabelTouchEnd(){
+    const { dragStart, dragged, offset, handleWidth } = this.state;
+    
+    if(dragStart === undefined || dragStart === null || dragStart === false)
+      return;
+
+    // If the touch ended without motion, then either a mousedown event should fire, or it was a long press and should do nothing
+    if (!dragged || dragged === undefined || dragged === null){
+      this.setState({
+        dragStart: false,
+        dragged: false,
+      });
+      return
+    }
+
+    const { inverse } = this.props;
+    
+    let val = offset > -(handleWidth / 2);
+    val = inverse ? !val : val;
+
+    this.setState({
+      dragStart: false,
+      dragged: false,
+      value: val
+    }, () => {
+      this._updateContainerPosition();
+      this._fireStateChange(val);
+    });
+  }
+
   _handleLabelMouseUp(){
     const { dragStart, dragged, offset, handleWidth } = this.state;
     const value = this._getValue();
@@ -216,13 +254,17 @@ export default class Switch extends React.Component {
     if(dragStart === undefined || dragStart === null || dragStart === false)
       return;
 
-    const { inverse } = this.props;
+    const { inverse, tristate } = this.props;
 
-    let val = !value;
-
+    let val;
+    
     if(dragged){
       val = offset > -(handleWidth / 2);
       val = inverse ? !val : val;
+    } else if (tristate) {
+      val = value===null?true:null;
+    } else {
+      val = !value;
     }
 
     this.setState({
@@ -279,7 +321,7 @@ export default class Switch extends React.Component {
 
     let containerWidth = labelWidth + (handleWidth * 2);
     let wrapperWidth = labelWidth + handleWidth;
-    if(containerWidth == wrapperWidth)
+    if(containerWidth == wrapperWidth || handleWidth == "auto" || labelWidth == "auto")
       containerWidth = wrapperWidth = "auto";
 
     const wrapperParams = {
@@ -328,7 +370,7 @@ export default class Switch extends React.Component {
     const params = {
       ref:        e => this.elmOffHandle = e,
       style:      { width: handleWidth },
-      className:  `${baseClass}-handle-on ${baseClass}-${offColor}`,
+      className:  `${baseClass}-handle-off ${baseClass}-${offColor}`,
       onClick:    this._handleOffClick.bind(this)
     };
 
@@ -346,7 +388,7 @@ export default class Switch extends React.Component {
 
       onTouchStart: this._handleLabelMouseDown.bind(this),
       onTouchMove:  this._handleLabelMouseMove.bind(this),
-      onTouchEnd:   this._handleLabelMouseUp.bind(this),
+      onTouchEnd:   this._handleLabelTouchEnd.bind(this),
 
       onMouseDown:  this._handleLabelMouseDown.bind(this),
       onMouseMove:  this._handleLabelMouseMove.bind(this),
@@ -379,38 +421,40 @@ Switch.defaultProps = {
   disabled:       false,
   readonly:       false,
 
+  tristate:       false,
   defaultValue:   true,
   value:          undefined
 };
 
 Switch.propTypes = {
-  baseClass:      React.PropTypes.string,
-  wrapperClass:   React.PropTypes.string,
-  bsSize:         React.PropTypes.string,
+  baseClass:      PropTypes.string,
+  wrapperClass:   PropTypes.string,
+  bsSize:         PropTypes.string,
 
-  handleWidth:    React.PropTypes.oneOfType([
-                    React.PropTypes.string,
-                    React.PropTypes.number
+  handleWidth:    PropTypes.oneOfType([
+                    PropTypes.string,
+                    PropTypes.number
                   ]),
-  labelWidth:     React.PropTypes.oneOfType([
-                    React.PropTypes.string,
-                    React.PropTypes.number
+  labelWidth:     PropTypes.oneOfType([
+                    PropTypes.string,
+                    PropTypes.number
                   ]),
 
-  onColor:        React.PropTypes.string,
-  offColor:       React.PropTypes.string,
+  onColor:        PropTypes.string,
+  offColor:       PropTypes.string,
 
-  onText:         React.PropTypes.string,
-  offText:        React.PropTypes.string,
-  labelText:      React.PropTypes.string,
+  onText:         PropTypes.node,
+  offText:        PropTypes.node,
+  labelText:      PropTypes.string,
 
-  inverse:        React.PropTypes.bool,
-  animate:        React.PropTypes.bool,
+  inverse:        PropTypes.bool,
+  animate:        PropTypes.bool,
 
-  disabled:       React.PropTypes.bool,
-  readonly:       React.PropTypes.bool,
+  disabled:       PropTypes.bool,
+  readonly:       PropTypes.bool,
 
-  defaultValue:   React.PropTypes.bool,
-  value:          React.PropTypes.bool,
-  onChange:       React.PropTypes.func,
+  tristate:       PropTypes.bool,
+  defaultValue:   PropTypes.bool,
+  value:          PropTypes.bool,
+  onChange:       PropTypes.func,
 };
